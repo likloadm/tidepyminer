@@ -1,0 +1,15 @@
+LICENSE
+MANIFEST.in
+README
+setup.py
+src/cpu-miner.c
+src/module.c
+src/sha2.c
+src/sha256.c
+src/util.c
+src/yespower-opt.c
+src/yespower.c
+src/tdc_mine.egg-info/PKG-INFO
+src/tdc_mine.egg-info/SOURCES.txt
+src/tdc_mine.egg-info/dependency_links.txt
+src/tdc_mine.egg-info/top_level.txt
