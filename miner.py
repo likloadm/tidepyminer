@@ -63,7 +63,7 @@ def main():
     proc.start()
 
     s.sendall(b'{"id": 1, "method": "mining.subscribe", "params": []}\n')
-    lines = s.recv(1024).decode().split('\n')
+    lines = s.recv(2024).decode().split('\n')
     response = json.loads(lines[0])
     sub_details, extranonce1, extranonce2_size = response['result']
     print(sub_details, extranonce1, extranonce2_size)
