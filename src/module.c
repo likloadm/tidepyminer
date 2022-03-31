@@ -21,7 +21,7 @@ static PyObject *m_sha256d_str(PyObject *self, PyObject *args)
     Py_INCREF(coinb2str);
     Py_INCREF(merklestr);
 
-    ret = PyMem_Malloc(64);
+    ret = PyMem_Malloc(65);
 
     sha256d_str((uint8_t *)PyBytes_AsString((PyObject*) coinb1str), (uint8_t *)PyBytes_AsString((PyObject*) xnonce1str), (uint8_t *)PyBytes_AsString((PyObject*) xnonce2str), (uint8_t *)PyBytes_AsString((PyObject*) coinb2str), (uint8_t *)PyBytes_AsString((PyObject*) merklestr), ret);
 
@@ -55,7 +55,7 @@ static PyObject *m_miner_thread(PyObject *self, PyObject *args)
     Py_INCREF(blockheader);
     Py_INCREF(targetstr);
 
-    ret = PyMem_Malloc(138);
+    ret = PyMem_Malloc(139);
 
     miner_thread((uint8_t *)PyBytes_AsString((PyObject*) blockheader), (uint8_t *)PyBytes_AsString((PyObject*) targetstr), first_nonce, ret);
 
@@ -68,7 +68,6 @@ static PyObject *m_miner_thread(PyObject *self, PyObject *args)
     PyMem_Free(ret);
 
     return rv;
-
 }
 
 static PyMethodDef TdcmineMethods[] = {

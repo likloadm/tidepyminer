@@ -104,7 +104,9 @@ while True:
      d+=h
 
     merkleroot_1=tdc_mine.sha256d_str(coinb1.encode('utf8'),extranonce1.encode('utf8'),extranonce2.encode('utf8'),coinb2.encode('utf8'),d.encode('utf8'))
+
     print(merkleroot_1.decode('utf8'))
+
     znonce= random.randint(0, 2 ** 32 - 1)
     xnonce = hex(znonce)[2:].zfill(8)
     xblockheader = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits + xnonce
@@ -117,12 +119,9 @@ while True:
     z=nonce_and_hash.decode('utf-8').split(',')
     print(z)
 
-    if int.from_bytes(bfh(hash_encode(z[1])), byteorder='big') < 0x01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff*difficult:
-        print('success!!')
-        payload = '{"params": ["'+address+'", "'+job_id+'", "'+extranonce2 \
-            +'", "'+ntime+'", "'+z[0]+'"], "id": 1, "method": "mining.submit"}\n'
-        sock.sendall(bytes(payload, "UTF-8"))
-    else:
-        print('failed mine, hash is greater than target')
+    print('success!!')
+    payload = '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 \
+              + '", "' + ntime + '", "' + z[0] + '"], "id": 4, "method": "mining.submit"}\n'
+    sock.sendall(bytes(payload, "UTF-8"))
 
 sock.close()
