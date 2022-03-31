@@ -11,7 +11,7 @@ from pprint import pprint
 import time
 import random
 import tdc_mine
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, cpu_count
 
 
 def target_to_bits(target: int) -> int:
@@ -46,11 +46,15 @@ def bh2u(x: bytes) -> str:
 def hash_encode(x: bytes) -> str:
     return x[::-1]
 
+
 def worker(q, sock):
     started = time.time()
     hash_count = 0
+    job_id = None
     while 1:
         job = q.get()
+        if job_id == job.get('job_id'):
+            q.put(job)
         xblockheader0 = job.get('xblockheader0')
         job_id = job.get('job_id')
         extranonce2 = job.get('extranonce2')
@@ -103,9 +107,14 @@ def miner():
     # we read until 'mining.notify' is reached
 
     q = Queue()
-    proc = Process(target=worker, args=(q, sock))
-    proc.daemon = True
-    proc.start()
+    print(cpu_count())
+    procs = []
+    count = 2
+    for number in range(count):
+        proc = Process(target=worker, args=(q, sock))
+        proc.daemon = True
+        procs.append(proc)
+        proc.start()
 
     try:
         while True:
@@ -143,14 +152,15 @@ def miner():
                 znonce = random.randint(0, 2 ** 32 - 1)
 
             if b'mining.set_difficulty' in response or b'mining.notify' in response:
-                q.put({"xblockheader0": xblockheader0,
-                       "job_id": job_id,
-                       "extranonce2": extranonce2,
-                       "ntime": ntime,
-                       "difficult": difficult,
-                       "nonce": znonce,
-                       'address':address
-                       })
+                for number in range(count):
+                    q.put({"xblockheader0": xblockheader0,
+                           "job_id": job_id,
+                           "extranonce2": extranonce2,
+                           "ntime": ntime,
+                           "difficult": difficult,
+                           "nonce": znonce,
+                           'address':address
+                           })
     except KeyboardInterrupt:
         proc.terminate()
         sock.close()
