@@ -109,7 +109,7 @@ def miner():
     q = Queue()
     print(cpu_count())
     procs = []
-    count = 2
+    count = 6
     for number in range(count):
         proc = Process(target=worker, args=(q, sock))
         proc.daemon = True
@@ -152,6 +152,8 @@ def miner():
                 znonce = random.randint(0, 2 ** 32 - 1)
 
             if b'mining.set_difficulty' in response or b'mining.notify' in response:
+                while not q.empty():
+                    q.get()
                 for number in range(count):
                     q.put({"xblockheader0": xblockheader0,
                            "job_id": job_id,
