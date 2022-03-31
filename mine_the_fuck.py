@@ -53,8 +53,6 @@ def worker(q, sock):
     job_id = None
     while 1:
         job = q.get()
-        if job_id == job.get('job_id'):
-            q.put(job)
         xblockheader0 = job.get('xblockheader0')
         job_id = job.get('job_id')
         extranonce2 = job.get('extranonce2')
@@ -106,14 +104,18 @@ def miner():
 
     # we read until 'mining.notify' is reached
 
-    q = Queue()
+
     print(cpu_count())
     procs = []
+    queues = []
     count = 6
+
     for number in range(count):
+        q = Queue()
         proc = Process(target=worker, args=(q, sock))
         proc.daemon = True
         procs.append(proc)
+        queues.append(q)
         proc.start()
 
     try:
@@ -152,10 +154,11 @@ def miner():
                 znonce = random.randint(0, 2 ** 32 - 1)
 
             if b'mining.set_difficulty' in response or b'mining.notify' in response:
-                while not q.empty():
-                    q.get()
                 for number in range(count):
-                    q.put({"xblockheader0": xblockheader0,
+                    if not queues[number].empty():
+                        queues[number].get()
+
+                    queues[number].put({"xblockheader0": xblockheader0,
                            "job_id": job_id,
                            "extranonce2": extranonce2,
                            "ntime": ntime,
