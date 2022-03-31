@@ -108,7 +108,7 @@ def miner():
     print(cpu_count())
     procs = []
     queues = []
-    count = 6
+    count = cpu_count()
 
     for number in range(count):
         q = Queue()
