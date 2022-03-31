@@ -56,10 +56,11 @@ def worker(q, sock):
         extranonce2 = job.get('extranonce2')
         ntime = job.get("ntime")
         difficult = job.get('difficult')
-        nonce = job.get('nonce')
+
         address = job.get('address')
         print(job)
         while 1:
+            nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
             xnonce = hex(nonce)[2:].zfill(8)
             xblockheader = xblockheader0 + xnonce
 
@@ -67,7 +68,7 @@ def worker(q, sock):
             z = nonce_and_hash.decode('utf-8').split(',')
 
             print('success!!')
-            print('success!!', address, job_id, ntime, z[0])
+            print('success!!', address, job_id, ntime, z[0], nonce)
             payload = '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 \
                       + '", "' + ntime + '", "' + z[0] + '"], "id": 4, "method": "mining.submit"}\n'
             sock.sendall(bytes(payload, "UTF-8"))
