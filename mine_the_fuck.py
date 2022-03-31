@@ -109,7 +109,7 @@ while True:
     xnonce = hex(znonce)[2:].zfill(8)
     xblockheader = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits + xnonce
     print("xblockheader", xblockheader)
-    nonce_and_hash=tdc_mine.miner_thread(xblockheader.encode('utf8'),bytes(str(difficult)), znonce)
+    nonce_and_hash=tdc_mine.miner_thread(xblockheader.encode('utf8'),bytes(str(difficult), "utf-8"), znonce)
 
     print("XFUCK")
     print(nonce_and_hash)
