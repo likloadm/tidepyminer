@@ -88,20 +88,23 @@ def worker(q, sock, number):
 def miner(address, host, port, cpu_count=cpu_count()):
     print("address:{}".format(address))
     print("host:{} port:{}".format(host, port))
+    print("Count threads: {}".format(cpu_count))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, port))
+    print("Socket connected")
 
     sock.sendall(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
     lines = sock.recv(1024).decode().split('\n')
     response = json.loads(lines[0])
     sub_details, extranonce1, extranonce2_size = response['result']
     sock.sendall(b'{"params": ["' + address.encode() + b'", "password"], "id": 2, "method": "mining.authorize"}\n')
+    print("Mining authorize")
 
     procs = []
     queues = []
     count = cpu_count
-
+    print("start mining")
     for number in range(count):
         q = Queue()
         proc = Process(target=worker, args=(q, sock, number+1))
