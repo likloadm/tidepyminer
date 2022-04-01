@@ -168,7 +168,6 @@ def miner(address, host, port, cpu_count=cpu_count()):
         miner(address, host, port, cpu_count)
 
 
-
 if __name__ == "__main__":
     address = 'TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.upgrade'
     host = 'pool.tidecoin.exchange'
