@@ -1,2 +1,5 @@
-import tdc_mine;
+import tdc_mine
 
+
+
+print(tdc_mine.miner_thread(b"010000207fad5b370cc4ff5d0381c9e48c4ed6ed45fdd15b68382d5a20841dd74bfde233cd9a949a07e1ea9c5ddedc6d98174ed743cb693e7798faff142093958eccaaf37e07f35f3915071e000d0000", b'0.2', 2147573200))

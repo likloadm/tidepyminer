@@ -14,6 +14,10 @@ import tdc_mine
 from multiprocessing import Process, Queue, cpu_count
 
 
+def hash_decode(x: str) -> bytes:
+    return bfh(x)[::-1]
+
+
 def target_to_bits(target: int) -> int:
     c = ("%066x" % target)[2:]
     while c[:2] == '00' and len(c) > 6:
@@ -47,6 +51,19 @@ def hash_encode(x: bytes) -> str:
     return x[::-1]
 
 
+def miner_thread(xblockheader, difficult, q):
+    z = [0, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"]
+    while int.from_bytes(hash_decode(z[1]), byteorder='big') > int(
+            1 / (difficult / 65536) * 0x00000000ffff0000000000000000000000000000000000000000000000000000):
+        nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
+
+        nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult / 2), "utf-8"), nonce)
+        if not q.empty():
+            return False
+        z = nonce_and_hash.decode('utf-8').split(',')
+    return z
+
+
 def worker(q, sock):
     started = time.time()
     hash_count = 0
@@ -60,21 +77,15 @@ def worker(q, sock):
         difficult = job.get('difficult')
 
         address = job.get('address')
-        print(job)
         while 1:
-            nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
-            xnonce = hex(nonce)[2:].zfill(8)
+            xnonce = "00000000"
             xblockheader = xblockheader0 + xnonce
-
-            nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult), "utf-8"), nonce)
-            z = nonce_and_hash.decode('utf-8').split(',')
-
+            if not (z := miner_thread(xblockheader, difficult, q)):
+                break
             print('success!!')
-            print('success!!', address, job_id, ntime, z[0], nonce)
             payload = '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 \
                       + '", "' + ntime + '", "' + z[0] + '"], "id": 4, "method": "mining.submit"}\n'
             sock.sendall(bytes(payload, "UTF-8"))
-            nonce += 1
             if not q.empty():
                 break
 
@@ -108,7 +119,7 @@ def miner():
     print(cpu_count())
     procs = []
     queues = []
-    count = cpu_count()
+    count = 1 #cpu_count()
 
     for number in range(count):
         q = Queue()
