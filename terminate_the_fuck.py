@@ -49,42 +49,30 @@ def bh2u(x: bytes) -> str:
     return x.hex()
 
 
-def miner_thread(xblockheader, difficult, q):
-    z = [0, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"]
-    while int.from_bytes(hash_decode(z[1]), byteorder='big') > int(
-            1 / (difficult / 65536) * 0x00000000ffff0000000000000000000000000000000000000000000000000000):
-        nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
-        nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult / 16), "utf-8"), nonce)
-        if not q.empty():
-            return False
-        z = nonce_and_hash.decode('utf-8').split(',')
+def miner_thread(xblockheader, difficult):
+    nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
+    nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult), "utf-8"), nonce)
+    z = nonce_and_hash.decode('utf-8').split(',')
     return z
 
 
-def worker(q, sock, number):
+def worker(job, sock, number):
     xnonce = "00000000"
+    print(f"worker {number} start")
+    xblockheader0 = job.get('xblockheader0')
+    job_id = job.get('job_id')
+    extranonce2 = job.get('extranonce2')
+    ntime = job.get("ntime")
+    difficult = job.get('difficult')
+    address = job.get('address')
+    xblockheader = xblockheader0 + xnonce
+    payload1 = '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "'
+    payload2 = '"], "id": 4, "method": "mining.submit"}\n'
     while 1:
-
-        job = q.get()
-        xblockheader0 = job.get('xblockheader0')
-        job_id = job.get('job_id')
-        extranonce2 = job.get('extranonce2')
-        ntime = job.get("ntime")
-        difficult = job.get('difficult')
-        address = job.get('address')
-        xblockheader = xblockheader0 + xnonce
-        payload1 = '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "'
-        payload2 = '"], "id": 4, "method": "mining.submit"}\n'
-
-        while 1:
-            started = time.time()
-            if not (z := miner_thread(xblockheader, difficult, q)):
-                break
-            print(f'{number} thread yay!!! Time:', time.time()-started, 'Diff', difficult)
-            sock.sendall(bytes(payload1+z[0]+payload2, "UTF-8"))
-            if not q.empty():
-                break
-        print(f"worker {number} go to next job")
+        started = time.time()
+        z = miner_thread(xblockheader, difficult)
+        print(f'{number} thread yay!!! Time:', time.time() - started, 'Diff', difficult)
+        sock.sendall(bytes(payload1 + z[0] + payload2, "UTF-8"))
 
 
 def miner(address, host, port, cpu_count=cpu_count()):
@@ -105,21 +93,14 @@ def miner(address, host, port, cpu_count=cpu_count()):
     print("Mining authorize")
 
     procs = []
-    queues = []
     count = cpu_count
     print("start mining")
-    for number in range(count):
-        q = Queue()
-        proc = Process(target=worker, args=(q, sock, number+1))
-        proc.daemon = True
-        procs.append(proc)
-        queues.append(q)
-        proc.start()
 
     try:
         while True:
             response = b''
             comeback = sock.recv(2024)
+            print(comeback)
             response += comeback
 
             # get rid of empty lines
@@ -146,18 +127,21 @@ def miner(address, host, port, cpu_count=cpu_count()):
                 xblockheader0 = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits
                 print("Mining notify")
 
-            if b'mining.set_difficulty' in response or b'mining.notify' in response:
+                for proc in procs:
+                    proc.terminate()
+                    print("worker terminate")
+                procs = []
                 for number in range(count):
-                    if not queues[number].empty():
-                        queues[number].get()
-
-                    queues[number].put({"xblockheader0": xblockheader0,
+                    proc = Process(target=worker, args=({"xblockheader0": xblockheader0,
                            "job_id": job_id,
                            "extranonce2": extranonce2,
                            "ntime": ntime,
                            "difficult": difficult,
                            'address':address
-                           })
+                           }, sock, number + 1))
+                    proc.daemon = True
+                    procs.append(proc)
+                    proc.start()
 
     except KeyboardInterrupt:
         for proc in procs:
