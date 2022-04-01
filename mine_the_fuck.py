@@ -155,6 +155,18 @@ def miner(address, host, port, cpu_count=cpu_count()):
         for proc in procs:
             proc.terminate()
         sock.close()
+    except:
+        try:
+            for proc in procs:
+                proc.terminate()
+        except:
+            pass
+        try:
+            sock.close()
+        except:
+            pass
+        miner(address, host, port, cpu_count)
+
 
 
 if __name__ == "__main__":
