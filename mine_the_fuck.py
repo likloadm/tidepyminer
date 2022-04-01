@@ -54,7 +54,7 @@ def miner_thread(xblockheader, difficult, q):
     while int.from_bytes(hash_decode(z[1]), byteorder='big') > int(
             1 / (difficult / 65536) * 0x00000000ffff0000000000000000000000000000000000000000000000000000):
         nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
-        nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult / 4), "utf-8"), nonce)
+        nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult / 8), "utf-8"), nonce)
         if not q.empty():
             return False
         z = nonce_and_hash.decode('utf-8').split(',')
@@ -64,6 +64,7 @@ def miner_thread(xblockheader, difficult, q):
 def worker(q, sock, number):
     xnonce = "00000000"
     while 1:
+
         job = q.get()
         xblockheader0 = job.get('xblockheader0')
         job_id = job.get('job_id')
@@ -83,6 +84,7 @@ def worker(q, sock, number):
             sock.sendall(bytes(payload1+z[0]+payload2, "UTF-8"))
             if not q.empty():
                 break
+        print(f"worker {number} go to next job")
 
 
 def miner(address, host, port, cpu_count=cpu_count()):
@@ -98,6 +100,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
     lines = sock.recv(1024).decode().split('\n')
     response = json.loads(lines[0])
     sub_details, extranonce1, extranonce2_size = response['result']
+    extranonce2 = '00' * extranonce2_size
     sock.sendall(b'{"params": ["' + address.encode() + b'", "password"], "id": 2, "method": "mining.authorize"}\n')
     print("Mining authorize")
 
@@ -124,8 +127,9 @@ def miner(address, host, port, cpu_count=cpu_count()):
                 diff = [json.loads(res) for res in response.decode().split('\n') if
                         len(res.strip()) > 0 and 'mining.set_difficulty' in res]
                 difficult = diff[0]['params'][0]
+                print("new stratum difficulty: ", difficult)
 
-            if (b'mining.notify' in response):
+            if b'mining.notify' in response:
                 responses = [json.loads(res) for res in response.decode().split('\n') if
                              len(res.strip()) > 0 and 'mining.notify' in res]
 
@@ -135,11 +139,12 @@ def miner(address, host, port, cpu_count=cpu_count()):
 
                 for h in merkle_branch:
                     d += h
-                extranonce2 = '00' * extranonce2_size
+
                 merkleroot_1 = tdc_mine.sha256d_str(coinb1.encode('utf8'), extranonce1.encode('utf8'),
                                                     extranonce2.encode('utf8'), coinb2.encode('utf8'), d.encode('utf8'))
 
                 xblockheader0 = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits
+                print("Mining notify")
 
             if b'mining.set_difficulty' in response or b'mining.notify' in response:
                 for number in range(count):
@@ -153,6 +158,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
                            "difficult": difficult,
                            'address':address
                            })
+            time.sleep(1)
 
     except KeyboardInterrupt:
         for proc in procs:
@@ -182,7 +188,7 @@ if __name__ == "__main__":
                                                  "donating to one of the addresses indicated in the "
                                                  "README.md file")
 
-    parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3033", help='mining server url (eg: pool.tidecoin.exchange:3033)')
+    parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3032", help='mining server url (eg: pool.tidecoin.exchange:3033)')
     parser.add_argument('-u', '--user', dest='username', default='TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.default', help='username for mining server',
                         metavar="USERNAME")
     parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count threads',
