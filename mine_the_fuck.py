@@ -173,4 +173,4 @@ if __name__ == "__main__":
     host = 'pool.tidecoin.exchange'
     port = 3033
 
-    miner(address, host, port, 4)
+    miner(address, host, port, cpu_count())
