@@ -169,8 +169,22 @@ def miner(address, host, port, cpu_count=cpu_count()):
 
 
 if __name__ == "__main__":
-    address = 'TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.upgrade'
-    host = 'pool.tidecoin.exchange'
-    port = 3033
+    import argparse
+    import sys
 
-    miner(address, host, port, cpu_count())
+    # Parse the command line
+    parser = argparse.ArgumentParser(description="PyMiner is a Stratum CPU mining client. "
+                                                 "If you like this piece of software, please "
+                                                 "consider supporting its future development via "
+                                                 "donating to one of the addresses indicated in the "
+                                                 "README.md file")
+
+    parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3033", help='mining server url (eg: pool.tidecoin.exchange:3033)')
+    parser.add_argument('-u', '--user', dest='username', default='TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.default', help='username for mining server',
+                        metavar="USERNAME")
+    parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count threads',
+                        metavar="USERNAME")
+
+    options = parser.parse_args(sys.argv[1:])
+
+    miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads))
