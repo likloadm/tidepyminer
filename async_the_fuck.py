@@ -9,6 +9,8 @@ import random
 import tdc_mine
 import time
 from multiprocessing import Process, Queue, cpu_count
+import asyncio
+import websockets
 
 
 bfh = bytes.fromhex
@@ -85,19 +87,12 @@ def worker(q, sock, number):
                 break
 
 
-def miner(address, host, port, cpu_count=cpu_count()):
+async def miner(address, host, port, cpu_count=cpu_count()):
     print("address:{}".format(address))
     print("host:{} port:{}".format(host, port))
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((host, port))
-
-    sock.sendall(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
-    lines = sock.recv(1024).decode().split('\n')
-    response = json.loads(lines[0])
-    sub_details, extranonce1, extranonce2_size = response['result']
-    sock.sendall(b'{"params": ["' + address.encode() + b'", "password"], "id": 2, "method": "mining.authorize"}\n')
-
+    async with websockets.serve(echo, host, port) as websocket:
+        await websocket.send(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
+        await asyncio.Future()  # run forever
     procs = []
     queues = []
     count = cpu_count
@@ -115,6 +110,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
             response = b''
             comeback = sock.recv(2024)
             response += comeback
+            print(comeback)
 
             # get rid of empty lines
             if b'mining.set_difficulty' in response:
@@ -150,16 +146,22 @@ def miner(address, host, port, cpu_count=cpu_count()):
                            "difficult": difficult,
                            'address':address
                            })
-
     except KeyboardInterrupt:
-        for proc in procs:
-            proc.terminate()
+        proc.terminate()
         sock.close()
 
 
+async def echo(websocket):
+    async for message in websocket:
+        await websocket.send(message)
+
+
+
+asyncio.run(main())
+
 if __name__ == "__main__":
     address = 'TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.upgrade'
+
     host = 'pool.tidecoin.exchange'
     port = 3033
-
     miner(address, host, port, 4)
