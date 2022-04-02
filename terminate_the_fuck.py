@@ -99,6 +99,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
     new_time = time.time()
     count_shares = 0
     global_count_share = 0
+    global_count_success_share = 0
     difficult = 0.5
     try:
         while True:
@@ -108,9 +109,11 @@ def miner(address, host, port, cpu_count=cpu_count()):
                 if response['id'] == 4 and not response['error']:
                     count_shares += 1
                     global_count_share += 1
-                    print("yay!!!", global_count_share)
+                    global_count_success_share += 1
+                    print(f"yay!!! {global_count_success_share}/{global_count_share}")
 
                 elif response['id'] == 4 and response['error']:
+                    global_count_share += 1
                     print("boooo", response['error'])
 
                 elif response['id'] == 2 and not response['error']:
@@ -126,8 +129,9 @@ def miner(address, host, port, cpu_count=cpu_count()):
                     print("New stratum difficulty: ", difficult)
 
                 elif response['method'] == 'mining.notify':
-                    job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs \
-                        = response['params']
+                    job_id, prevhash, coinb1, coinb2, merkle_branch, \
+                    version, nbits, ntime, clean_jobs = response['params']
+
                     d = ''
 
                     for h in merkle_branch:
