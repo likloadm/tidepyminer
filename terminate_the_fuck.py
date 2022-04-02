@@ -6,6 +6,8 @@
 import socket
 import json
 import random
+import traceback
+
 import tdc_mine
 import time
 from multiprocessing import Process, Queue, cpu_count
@@ -51,28 +53,27 @@ def bh2u(x: bytes) -> str:
 
 def miner_thread(xblockheader, difficult):
     nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
-    nonce_and_hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), bytes(str(difficult), "utf-8"), nonce)
-    z = nonce_and_hash.decode('utf-8').split(',')
-    return z
+    nonce_and_hash = tdc_mine.miner_thread(xblockheader, difficult, nonce)
+    return nonce_and_hash
 
 
 def worker(job, sock, number):
     xnonce = "00000000"
-    print(f"worker {number} start")
     xblockheader0 = job.get('xblockheader0')
     job_id = job.get('job_id')
     extranonce2 = job.get('extranonce2')
     ntime = job.get("ntime")
-    difficult = job.get('difficult')
+    difficult = str(job.get('difficult'))
+    bdiff = bytes(difficult, "utf-8")
     address = job.get('address')
-    xblockheader = xblockheader0 + xnonce
-    payload1 = '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "'
-    payload2 = '"], "id": 4, "method": "mining.submit"}\n'
+    xblockheader = (xblockheader0 + xnonce).encode('utf8')
+    payload1 = bytes('{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "', "UTF-8")
+    payload2 = bytes('"], "id": 4, "method": "mining.submit"}\n', "UTF-8")
     while 1:
-        started = time.time()
-        z = miner_thread(xblockheader, difficult)
-        print(f'{number} thread yay!!! Time:', time.time() - started, 'Diff', difficult)
-        sock.sendall(bytes(payload1 + z[0] + payload2, "UTF-8"))
+        # started = time.time()
+        z = miner_thread(xblockheader, bdiff)
+        # print(f'{number} thread yay!!! Time:', time.time() - started, 'Diff', difficult)
+        sock.sendall(payload1 + z[:8] + payload2)
 
 
 def miner(address, host, port, cpu_count=cpu_count()):
@@ -95,59 +96,83 @@ def miner(address, host, port, cpu_count=cpu_count()):
     procs = []
     count = cpu_count
     print("start mining")
-
+    new_time = time.time()
+    count_shares = 0
+    global_count_share = 0
+    difficult = 0.5
     try:
         while True:
-            response = b''
-            comeback = sock.recv(2024)
-            print(comeback)
-            response += comeback
+            response = sock.recv(2024).decode()
+            responses = [json.loads(res) for res in response.split('\n') if len(res.strip()) > 0]
+            for response in responses:
+                if response['id'] == 4 and not response['error']:
+                    count_shares += 1
+                    global_count_share += 1
+                    print("yay!!!", global_count_share)
 
-            # get rid of empty lines
-            if b'mining.set_difficulty' in response:
-                diff = [json.loads(res) for res in response.decode().split('\n') if
-                        len(res.strip()) > 0 and 'mining.set_difficulty' in res]
-                difficult = diff[0]['params'][0]
-                print("new stratum difficulty: ", difficult)
+                elif response['id'] == 4 and response['error']:
+                    print("boooo", response['error'])
 
-            if b'mining.notify' in response:
-                responses = [json.loads(res) for res in response.decode().split('\n') if
-                             len(res.strip()) > 0 and 'mining.notify' in res]
+                elif response['id'] == 2 and not response['error']:
+                    print("Authorize successful!!!")
 
-                job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs \
-                    = responses[0]['params']
-                d = ''
+                elif response['id'] == 2 and response['error']:
+                    print("Authorize error!!!", response['error'])
 
-                for h in merkle_branch:
-                    d += h
+                # get rid of empty lines
+                elif response['method'] == 'mining.set_difficulty':
+                    old_diff = difficult
+                    difficult = response['params'][0]
+                    print("New stratum difficulty: ", difficult)
 
-                merkleroot_1 = tdc_mine.sha256d_str(coinb1.encode('utf8'), extranonce1.encode('utf8'),
-                                                    extranonce2.encode('utf8'), coinb2.encode('utf8'), d.encode('utf8'))
+                elif response['method'] == 'mining.notify':
+                    job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs \
+                        = response['params']
+                    d = ''
 
-                xblockheader0 = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits
-                print("Mining notify")
+                    for h in merkle_branch:
+                        d += h
 
-                for proc in procs:
-                    proc.terminate()
-                    print("worker terminate")
-                procs = []
-                for number in range(count):
-                    proc = Process(target=worker, args=({"xblockheader0": xblockheader0,
-                           "job_id": job_id,
-                           "extranonce2": extranonce2,
-                           "ntime": ntime,
-                           "difficult": difficult,
-                           'address':address
-                           }, sock, number + 1))
-                    proc.daemon = True
-                    procs.append(proc)
-                    proc.start()
+                    merkleroot_1 = tdc_mine.sha256d_str(coinb1.encode('utf8'), extranonce1.encode('utf8'),
+                                                        extranonce2.encode('utf8'), coinb2.encode('utf8'), d.encode('utf8'))
+
+                    xblockheader0 = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits
+                    print("Mining notify")
+                    for proc in procs:
+                        proc.terminate()
+
+                    procs = []
+                    old_time = new_time
+                    new_time = time.time()
+                    for number in range(count):
+                        proc = Process(target=worker, args=({"xblockheader0": xblockheader0,
+                               "job_id": job_id,
+                               "extranonce2": extranonce2,
+                               "ntime": ntime,
+                               "difficult": difficult,
+                               'address':address
+                               }, sock, number + 1))
+                        proc.daemon = True
+                        procs.append(proc)
+                        proc.start()
+
+                    if count_shares:
+                        hashrate = count_shares * (old_diff / 65536) * 2 ** 32 / (new_time-old_time)
+                        print(f"Found {count_shares} shares in {round(new_time-old_time)} seconds at diff", old_diff)
+                        print(f"Current Hashrate:", round(hashrate), "H/s")
+                        old_diff = difficult
+                        count_shares = 0
+            time.sleep(0.5)
+
+
+
 
     except KeyboardInterrupt:
         for proc in procs:
             proc.terminate()
         sock.close()
     except:
+        print(traceback.format_exc())
         try:
             for proc in procs:
                 proc.terminate()
