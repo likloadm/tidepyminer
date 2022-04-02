@@ -160,9 +160,6 @@ def miner(address, host, port, cpu_count=cpu_count()):
                         count_shares = 0
             time.sleep(0.1)
 
-
-
-
     except KeyboardInterrupt:
         for proc in procs:
             proc.terminate()
