@@ -156,9 +156,9 @@ def miner(address, host, port, cpu_count=cpu_count()):
                         hashrate = count_shares * (old_diff / 65536) * 2 ** 32 / (new_time-old_time)
                         print(f"Found {count_shares} shares in {round(new_time-old_time)} seconds at diff", old_diff)
                         print(f"Current Hashrate:", round(hashrate), "H/s")
+                        print(f"Recommended diff:", round((count_shares*10/(new_time-old_time))*old_diff, 2))
                         old_diff = difficult
                         count_shares = 0
-            time.sleep(0.1)
 
     except KeyboardInterrupt:
         for proc in procs:
