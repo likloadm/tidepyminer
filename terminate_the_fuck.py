@@ -57,18 +57,7 @@ def miner_thread(xblockheader, difficult):
     return nonce_and_hash
 
 
-def worker(job, sock, number):
-    xnonce = "00000000"
-    xblockheader0 = job.get('xblockheader0')
-    job_id = job.get('job_id')
-    extranonce2 = job.get('extranonce2')
-    ntime = job.get("ntime")
-    difficult = str(job.get('difficult'))
-    bdiff = bytes(difficult, "utf-8")
-    address = job.get('address')
-    xblockheader = (xblockheader0 + xnonce).encode('utf8')
-    payload1 = bytes('{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "', "UTF-8")
-    payload2 = bytes('"], "id": 4, "method": "mining.submit"}\n', "UTF-8")
+def worker(xblockheader, payload1, payload2, bdiff, sock, number):
     while 1:
         # started = time.time()
         z = miner_thread(xblockheader, bdiff)
@@ -126,6 +115,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
                 elif response['method'] == 'mining.set_difficulty':
                     old_diff = difficult
                     difficult = response['params'][0]
+                    bdiff = bytes(str(difficult), "UTF-8")
                     print("New stratum difficulty: ", difficult)
 
                 elif response['method'] == 'mining.notify':
@@ -148,14 +138,16 @@ def miner(address, host, port, cpu_count=cpu_count()):
                     procs = []
                     old_time = new_time
                     new_time = time.time()
+
+                    xnonce = "00000000"
+                    xblockheader = (xblockheader0 + xnonce).encode('utf8')
+                    payload1 = bytes(
+                        '{"params": ["' + address + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "',
+                        "UTF-8")
+                    payload2 = bytes('"], "id": 4, "method": "mining.submit"}\n', "UTF-8")
+
                     for number in range(count):
-                        proc = Process(target=worker, args=({"xblockheader0": xblockheader0,
-                               "job_id": job_id,
-                               "extranonce2": extranonce2,
-                               "ntime": ntime,
-                               "difficult": difficult,
-                               'address':address
-                               }, sock, number + 1))
+                        proc = Process(target=worker, args=(xblockheader, payload1, payload2, bdiff, sock, number + 1))
                         proc.daemon = True
                         procs.append(proc)
                         proc.start()
@@ -166,7 +158,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
                         print(f"Current Hashrate:", round(hashrate), "H/s")
                         old_diff = difficult
                         count_shares = 0
-            time.sleep(0.5)
+            time.sleep(0.1)
 
 
 
