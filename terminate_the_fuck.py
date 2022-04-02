@@ -99,7 +99,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
                     count_shares += 1
                     global_count_share += 1
                     global_count_success_share += 1
-                    print(f"yay!!! {global_count_success_share}/{global_count_share}")
+                    print(f"accepted: {global_count_success_share}/{global_count_share} ({round(global_count_success_share/global_count_share*100)}%) (yay!!!)")
 
                 elif response['id'] == 4 and response['error']:
                     global_count_share += 1
