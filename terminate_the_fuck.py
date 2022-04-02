@@ -65,7 +65,7 @@ def worker(xblockheader, payload1, payload2, bdiff, sock, number):
         sock.sendall(payload1 + z[:8] + payload2)
 
 
-def miner(address, host, port, cpu_count=cpu_count()):
+def miner(address, host, port, cpu_count=cpu_count(), password='password'):
     print("address:{}".format(address))
     print("host:{} port:{}".format(host, port))
     print("Count threads: {}".format(cpu_count))
@@ -79,7 +79,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
     response = json.loads(lines[0])
     sub_details, extranonce1, extranonce2_size = response['result']
     extranonce2 = '00' * extranonce2_size
-    sock.sendall(b'{"params": ["' + address.encode() + b'", "password"], "id": 2, "method": "mining.authorize"}\n')
+    sock.sendall(b'{"params": ["' + address.encode() + b'", "' + password.encode() + b'"], "id": 2, "method": "mining.authorize"}\n')
     print("Mining authorize")
 
     procs = []
@@ -175,7 +175,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
             sock.close()
         except:
             pass
-        miner(address, host, port, cpu_count)
+        miner(address, host, port, cpu_count, password)
 
 
 if __name__ == "__main__":
@@ -194,7 +194,9 @@ if __name__ == "__main__":
                         metavar="USERNAME")
     parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count threads',
                         metavar="USERNAME")
+    parser.add_argument('-p', '--password', dest='password', default='password', help='password',
+                        metavar="USERNAME")
 
     options = parser.parse_args(sys.argv[1:])
 
-    miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads))
+    miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads), options.password)
