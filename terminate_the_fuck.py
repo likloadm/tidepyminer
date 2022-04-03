@@ -69,28 +69,28 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
     print("address:{}".format(address))
     print("host:{} port:{}".format(host, port))
     print("Count threads: {}".format(cpu_count))
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((host, port))
-    print("Socket connected")
-
-    sock.sendall(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
-    lines = sock.recv(1024).decode().split('\n')
-    response = json.loads(lines[0])
-    sub_details, extranonce1, extranonce2_size = response['result']
-    extranonce2 = '00' * extranonce2_size
-    sock.sendall(b'{"params": ["' + address.encode() + b'", "' + password.encode() + b'"], "id": 2, "method": "mining.authorize"}\n')
-    print("Mining authorize")
-
-    procs = []
-    count = cpu_count
-    print("start mining")
-    new_time = time.time()
-    count_shares = 0
-    global_count_share = 0
-    global_count_success_share = 0
-    difficult = 0.5
     try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
+        print("Socket connected")
+
+        sock.sendall(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
+        lines = sock.recv(1024).decode().split('\n')
+        response = json.loads(lines[0])
+        sub_details, extranonce1, extranonce2_size = response['result']
+        extranonce2 = '00' * extranonce2_size
+        sock.sendall(b'{"params": ["' + address.encode() + b'", "' + password.encode() + b'"], "id": 2, "method": "mining.authorize"}\n')
+        print("Mining authorize")
+
+        procs = []
+        count = cpu_count
+        print("start mining")
+        new_time = time.time()
+        count_shares = 0
+        global_count_share = 0
+        global_count_success_share = 0
+        difficult = 0.5
+
         while True:
             response = sock.recv(2024).decode()
             responses = [json.loads(res) for res in response.split('\n') if len(res.strip()) > 0]
