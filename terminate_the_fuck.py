@@ -175,7 +175,10 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
             sock.close()
         except:
             pass
+        print("Connection refused, restart after 30 s")
+        time.sleep(30)
         miner(address, host, port, cpu_count, password)
+
 
 
 if __name__ == "__main__":
