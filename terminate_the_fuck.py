@@ -62,6 +62,7 @@ def worker(xblockheader, payload1, payload2, bdiff, sock, number):
         # started = time.time()
         z = miner_thread(xblockheader, bdiff)
         # print(f'{number} thread yay!!! Time:', time.time() - started, 'Diff', difficult)
+        print(z)
         sock.sendall(payload1 + z[:8] + payload2)
 
 
