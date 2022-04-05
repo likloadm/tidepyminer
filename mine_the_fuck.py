@@ -121,6 +121,7 @@ def miner(address, host, port, cpu_count=cpu_count()):
             response = b''
             comeback = sock.recv(2024)
             response += comeback
+            print(comeback)
 
             # get rid of empty lines
             if b'mining.set_difficulty' in response:
