@@ -11,7 +11,7 @@ import traceback
 import tdc_mine
 import time
 from multiprocessing import Process, Queue, cpu_count
-
+from numba import cuda # Библиотека Nvidia для работы с GPU
 
 bfh = bytes.fromhex
 
