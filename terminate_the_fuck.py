@@ -58,12 +58,12 @@ def miner_thread(xblockheader, difficult):
 
 
 def worker(xblockheader, payload1, payload2, bdiff, sock, number):
-    while 1:
-        # started = time.time()
-        z = miner_thread(xblockheader, bdiff)
-        # print(f'{number} thread yay!!! Time:', time.time() - started, 'Diff', difficult)
-        print(payload1 + z[:8] + payload2)
-        sock.sendall(payload1 + z[:8] + payload2)
+    try:
+        while 1:
+            z = miner_thread(xblockheader, bdiff)
+            sock.sendall(payload1 + z[:8] + payload2)
+    except BrokenPipeError:
+        print("Pipe broken")
 
 
 def miner(address, host, port, cpu_count=cpu_count(), password='password'):
@@ -79,19 +79,19 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
         lines = sock.recv(1024).decode().split('\n')
         response = json.loads(lines[0])
         sub_details, extranonce1, extranonce2_size = response['result']
-        print(response)
         extranonce2 = '00' * extranonce2_size
         sock.sendall(b'{"params": ["' + address.encode() + b'", "' + password.encode() + b'"], "id": 2, "method": "mining.authorize"}\n')
         print("Mining authorize")
 
         procs = []
         count = cpu_count
-        print("start mining")
+        print("Start mining")
         new_time = time.time()
         count_shares = 0
         global_count_share = 0
         global_count_success_share = 0
         difficult = 0.5
+        timer_without_new_job = 0
 
         while True:
             response = sock.recv(2024).decode()
@@ -138,6 +138,7 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                         proc.terminate()
 
                     procs = []
+                    timer_without_new_job = time.time()
                     old_time = new_time
                     new_time = time.time()
 
@@ -161,6 +162,10 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                         print(f"Recommended diff:", round((count_shares*10/(new_time-old_time))*old_diff, 2))
                         old_diff = difficult
                         count_shares = 0
+            if timer_without_new_job - time.time() > 120:
+                raise
+
+
 
     except KeyboardInterrupt:
         for proc in procs:
@@ -182,7 +187,6 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
         miner(address, host, port, cpu_count, password)
 
 
-
 if __name__ == "__main__":
     import argparse
     import sys
@@ -194,7 +198,7 @@ if __name__ == "__main__":
                                                  "donating to one of the addresses indicated in the "
                                                  "README.md file")
 
-    parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3032", help='mining server url (eg: pool.tidecoin.exchange:3033)')
+    parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3032", help='mining server url (eg: pool.tidecoin.exchange:3032)')
     parser.add_argument('-u', '--user', dest='username', default='TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.default', help='username for mining server',
                         metavar="USERNAME")
     parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count threads',

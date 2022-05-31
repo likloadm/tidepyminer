@@ -1,193 +1,211 @@
-#  Copyright (c) 2019, The Monero Project
-#
-#  All rights reserved.
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met:
-#
-#  1. Redistributions of source code must retain the above copyright notice, this
-#  list of conditions and the following disclaimer.
-#
-#  2. Redistributions in binary form must reproduce the above copyright notice,
-#  this list of conditions and the following disclaimer in the documentation
-#  and/or other materials provided with the distribution.
-#
-#  3. Neither the name of the copyright holder nor the names of its contributors
-#  may be used to endorse or promote products derived from this software without
-#  specific prior written permission.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-#  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-#  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-#  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-#  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-#  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-#  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#A stratum compatible miniminer
+#based in the documentation
+#https://slushpool.com/help/#!/manual/stratum-protocol
+#2017-2019 Martin Nadal https://martinnadal.eu
 
-import argparse
 import socket
-import select
-import binascii
-import struct
 import json
-import sys
-import os
-import time
-from multiprocessing import Process, Queue
-import tdc_mine
 import random
+import traceback
 
-pool_host = 'pool.tidecoin.exchange'
-pool_port = 3033
-pool_pass = 'xx'
-wallet_address = 'TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw'
-nicehash = False
-address = 'TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw'
+import tdc_mine
+import time
+from multiprocessing import Process, Queue, cpu_count
 
 
-host    = 'pool.tidecoin.exchange'
-port    = 3033
+bfh = bytes.fromhex
 
 
-def main():
-    pool_ip = socket.gethostbyname(pool_host)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((pool_ip, pool_port))
+def hash_decode(x: str) -> bytes:
+    return bfh(x)[::-1]
 
-    q = Queue()
-    proc = Process(target=worker, args=(q, s))
-    proc.daemon = True
-    proc.start()
 
-    s.sendall(b'{"id": 1, "method": "mining.subscribe", "params": []}\n')
-    lines = s.recv(2024).decode().split('\n')
-    response = json.loads(lines[0])
-    sub_details, extranonce1, extranonce2_size = response['result']
-    print(sub_details, extranonce1, extranonce2_size)
+def target_to_bits(target: int) -> int:
+    c = ("%066x" % target)[2:]
+    while c[:2] == '00' and len(c) > 6:
+        c = c[2:]
+    bitsN, bitsBase = len(c) // 2, int.from_bytes(bfh(c[:6]), byteorder='big')
+    if bitsBase >= 0x800000:
+        bitsN += 1
+        bitsBase >>= 8
+    return bitsN << 24 | bitsBase
 
-    login = {
-        'method': 'mining.authorize',
-        'params': [
-            wallet_address,
-            pool_pass
-        ],
-        'id': 1
-    }
-    print('Logging into pool: {}:{}'.format(pool_host, pool_port))
-    print('Using NiceHash mode: {}'.format(nicehash))
-    s.sendall(str(json.dumps(login) + '\n').encode('utf-8'))
 
+def bits_to_target(bits: int) -> int:
+    bitsN = (bits >> 24) & 0xff
+    if not (0x03 <= bitsN <= 0x20):
+        raise Exception("First part of bits should be in [0x03, 0x1d]")
+    bitsBase = bits & 0xffffff
+    if not (0x8000 <= bitsBase <= 0x7fffff):
+        raise Exception("Second part of bits should be in [0x8000, 0x7fffff]")
+    return bitsBase << (8 * (bitsN - 3))
+
+
+def bh2u(x: bytes) -> str:
+    """
+    str with hex representation of a bytes-like object
+    >>> x = bytes((1, 2, 10))
+    >>> bh2u(x)
+    '01020A'
+    """
+    return x.hex()
+
+
+def miner_thread(xblockheader, difficult):
+    nonce = random.randint(0, 2 ** 32 - 1)  # job.get('nonce')
+    nonce_and_hash = tdc_mine.miner_thread(xblockheader, difficult, nonce)
+    return nonce_and_hash
+
+
+def worker(xblockheader, payload1, payload2, bdiff, sock, number):
     try:
         while 1:
-            line = s.makefile().readline()
-            r = json.loads(line)
-            error = r.get('error')
-            result = r.get('result')
-            method = r.get('method')
-            params = r.get('params')
-            if error:
-                print('Error: {}'.format(error))
-                continue
-            if result and result.get('status'):
-                print('Status: {}'.format(result.get('status')))
-            if result and result.get('job'):
-                login_id = result.get('id')
-                job = result.get('job')
-                job['login_id'] = login_id
-                q.put(job)
-            elif method and method == 'job' and len(login_id):
-                q.put(params)
+            z = miner_thread(xblockheader, bdiff)
+            sock.sendall(payload1 + z[:8] + payload2)
+    except BrokenPipeError:
+        print("Pipe broken")
+
+
+def miner(address, host, port, cpu_count=cpu_count(), password='password'):
+    print("address:{}".format(address))
+    print("host:{} port:{}".format(host, port))
+    print("Count threads: {}".format(cpu_count))
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
+        print("Socket connected")
+
+        sock.sendall(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
+        lines = sock.recv(1024).decode().split('\n')
+        response = json.loads(lines[0])
+        sub_details, extranonce1, extranonce2_size = response['result']
+        extranonce2 = '00' * extranonce2_size
+        sock.sendall(b'{"params": ["' + address.encode() + b'", "' + password.encode() + b'"], "id": 2, "method": "mining.authorize"}\n')
+        print("Mining authorize")
+
+        procs = []
+        count = cpu_count
+        print("Start mining")
+        new_time = time.time()
+        count_shares = 0
+        global_count_share = 0
+        global_count_success_share = 0
+        difficult = 0.5
+        timer_without_new_job = 0
+
+        while True:
+            response = sock.recv(2024).decode()
+            responses = [json.loads(res) for res in response.split('\n') if len(res.strip()) > 0]
+            for response in responses:
+                if response['id'] == 4 and not response['error']:
+                    count_shares += 1
+                    global_count_share += 1
+                    global_count_success_share += 1
+                    print(f"accepted: {global_count_success_share}/{global_count_share} ({round(global_count_success_share/global_count_share*100)}%) (yay!!!)")
+
+                elif response['id'] == 4 and response['error']:
+                    global_count_share += 1
+                    print("boooo", response['error'])
+
+                elif response['id'] == 2 and not response['error']:
+                    print("Authorize successful!!!")
+
+                elif response['id'] == 2 and response['error']:
+                    print("Authorize error!!!", response['error'])
+
+                # get rid of empty lines
+                elif response['method'] == 'mining.set_difficulty':
+                    old_diff = difficult
+                    difficult = response['params'][0]
+                    bdiff = bytes(str(difficult), "UTF-8")
+                    print("New stratum difficulty: ", difficult)
+
+                elif response['method'] == 'mining.notify':
+                    job_id, prevhash, coinb1, coinb2, merkle_branch, \
+                    version, nbits, ntime, clean_jobs = response['params']
+
+                    d = ''
+
+                    for h in merkle_branch:
+                        d += h
+
+                    merkleroot_1 = tdc_mine.sha256d_str(coinb1.encode('utf8'), extranonce1.encode('utf8'),
+                                                        extranonce2.encode('utf8'), coinb2.encode('utf8'), d.encode('utf8'))
+
+                    xblockheader0 = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits
+                    print("Mining notify")
+                    for proc in procs:
+                        proc.terminate()
+
+                    procs = []
+                    timer_without_new_job = time.time()
+                    old_time = new_time
+                    new_time = time.time()
+
+                    xnonce = "00000000"
+                    xblockheader = (xblockheader0 + xnonce).encode('utf8')
+                    payload1 = bytes(
+                        '{"params": ["' + "address" + '", "' + job_id + '", "' + extranonce2 + '", "' + ntime + '", "',
+                        "UTF-8")
+                    payload2 = bytes('"], "id": 4, "method": "mining.submit"}\n', "UTF-8")
+
+                    for number in range(count):
+                        proc = Process(target=worker, args=(xblockheader, payload1, payload2, bdiff, sock, number + 1))
+                        proc.daemon = True
+                        procs.append(proc)
+                        proc.start()
+
+                    if count_shares:
+                        hashrate = count_shares * (old_diff / 65536) * 2 ** 32 / (new_time-old_time)
+                        print(f"Found {count_shares} shares in {round(new_time-old_time)} seconds at diff", old_diff)
+                        print(f"Current Hashrate:", round(hashrate), "H/s")
+                        print(f"Recommended diff:", round((count_shares*10/(new_time-old_time))*old_diff, 2))
+                        old_diff = difficult
+                        count_shares = 0
+            if timer_without_new_job - time.time() > 120:
+                raise
+
+
+
     except KeyboardInterrupt:
-        print('{}Exiting'.format(os.linesep))
-        proc.terminate()
-        s.close()
-        sys.exit(0)
+        for proc in procs:
+            proc.terminate()
+        sock.close()
+    except:
+        print(traceback.format_exc())
+        try:
+            for proc in procs:
+                proc.terminate()
+        except:
+            pass
+        try:
+            sock.close()
+        except:
+            pass
+        print("Connection refused, restart after 30 s")
+        time.sleep(30)
+        miner(address, host, port, cpu_count, password)
 
 
-def pack_nonce(blob, nonce):
-    b = binascii.unhexlify(blob)
-    bin = struct.pack('39B', *bytearray(b[:39]))
-    if nicehash:
-        bin += struct.pack('I', nonce & 0x00ffffff)[:3]
-        bin += struct.pack('{}B'.format(len(b) - 42), *bytearray(b[42:]))
-    else:
-        bin += struct.pack('I', nonce)
-        bin += struct.pack('{}B'.format(len(b) - 43), *bytearray(b[43:]))
-    return bin
+if __name__ == "__main__":
+    import argparse
+    import sys
 
+    # Parse the command line
+    parser = argparse.ArgumentParser(description="PyMiner is a Stratum CPU mining client. "
+                                                 "If you like this piece of software, please "
+                                                 "consider supporting its future development via "
+                                                 "donating to one of the addresses indicated in the "
+                                                 "README.md file")
 
-def worker(q, s):
-    started = time.time()
-    hash_count = 0
+    parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3032", help='mining server url (eg: pool.tidecoin.exchange:3032)')
+    parser.add_argument('-u', '--user', dest='username', default='TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.default', help='username for mining server',
+                        metavar="USERNAME")
+    parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count threads',
+                        metavar="USERNAME")
+    parser.add_argument('-p', '--password', dest='password', default='password', help='password',
+                        metavar="USERNAME")
 
-    while 1:
-        job = q.get()
-        if job.get('login_id'):
-            login_id = job.get('login_id')
-            print('Login ID: {}'.format(login_id))
-        target = job.get('target')
-        job_id = job.get('job_id')
-        height = job.get('height')
-        version = job.get('version')
-        prevhash = job.get('prevhash')
-        merkleroot_1 = job.get('merkleroot_1')
-        ntime = job.get('ntime')
-        nbits = job.get('nbits')
+    options = parser.parse_args(sys.argv[1:])
 
-        print('New tide job with target: {}, height: {}'.format(target, height))
-        target = struct.unpack('I', binascii.unhexlify(target))[0]
-        if target >> 32 == 0:
-            target = int(0xFFFFFFFFFFFFFFFF / int(0xFFFFFFFF / target))
-        nonce = 1
-
-        while 1:
-            znonce = random.randint(0, 2 ** 32 - 1)
-            xnonce = hex(znonce)[2:].zfill(8)
-            xblockheader = version + prevhash + merkleroot_1.decode('utf8') + ntime + nbits + xnonce
-            hash = tdc_mine.miner_thread(xblockheader.encode('utf8'), b'0.05', znonce)
-            # pycryptonight.cn_slow_hash(bin, cnv, 0, height)
-            hash_count += 1
-            sys.stdout.write('.')
-            sys.stdout.flush()
-            hex_hash = binascii.hexlify(hash).decode()
-            r64 = struct.unpack('Q', hash[24:])[0]
-            if r64 < target:
-                elapsed = time.time() - started
-                hr = int(hash_count / elapsed)
-                print('{}Hashrate: {} H/s'.format(os.linesep, hr))
-                if nicehash:
-                    nonce = struct.unpack('I', bin[39:43])[0]
-                submit = {
-                    'method': 'mining.submit',
-                    'params': {
-                        'id': login_id,
-                        'job_id': job_id,
-                        'nonce': binascii.hexlify(struct.pack('<I', nonce)).decode(),
-                        'result': hex_hash
-                    },
-                    'id': 1
-                }
-                print('Submitting hash: {}'.format(hex_hash))
-                s.sendall(str(json.dumps(submit) + '\n').encode('utf-8'))
-                select.select([s], [], [], 3)
-                if not q.empty():
-                    break
-            nonce += 1
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--nicehash', action='store_true', help='NiceHash mode')
-    parser.add_argument('--host', action='store', help='Pool host')
-    parser.add_argument('--port', action='store', help='Pool port')
-    args = parser.parse_args()
-    if args.nicehash:
-        nicehash = True
-    if args.host:
-        pool_host = args.host
-    if args.port:
-        pool_port = int(args.port)
-    main()
+    miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads), options.password)
