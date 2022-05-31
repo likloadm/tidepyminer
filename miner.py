@@ -67,6 +67,17 @@ def worker(xblockheader, payload1, payload2, bdiff, sock, number):
 
 
 def miner(address, host, port, cpu_count=cpu_count(), password='password'):
+    print("PyTideMiner is a Stratum CPU mining client. \n"
+          "If you like this piece of software, please "
+          "consider supporting its future development via "
+          "donating to this address TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw\n\n"
+          "Parameters:"
+          "-o mining server url (eg: pool.tidecoin.exchange:3032)\n"
+          "-u username(mining address) for mining server\n"
+          "-t count miner threads\n"
+          "-p password for mining server\n"
+          "Support chat: https://t.me/pool_tidecoin_exchange\n")
+
     print("address:{}".format(address))
     print("host:{} port:{}".format(host, port))
     print("Count threads: {}".format(cpu_count))
