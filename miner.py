@@ -7,7 +7,7 @@ import socket
 import json
 import random
 import traceback
-
+import multiprocessing
 import tdc_mine
 import time
 from multiprocessing import Process, Queue, cpu_count
@@ -188,6 +188,7 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     import argparse
     import sys
 
