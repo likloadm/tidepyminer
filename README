@@ -1,1 +1,4 @@
+pip3 install .
+
 python3 miner.py -o eu1-pool.tidecoin.exchange:3032 -u TPREEvraPdTJz8D1ouq7DKRRefTjwQveJ7.my -t 4 -p d=0.2,m=solo
+
