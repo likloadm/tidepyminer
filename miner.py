@@ -175,27 +175,9 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                         count_shares = 0
             if timer_without_new_job - time.time() > 120:
                 raise
-
-
-
-    except KeyboardInterrupt:
-        for proc in procs:
-            proc.terminate()
-        sock.close()
     except:
         print(traceback.format_exc())
-        try:
-            for proc in procs:
-                proc.terminate()
-        except:
-            pass
-        try:
-            sock.close()
-        except:
-            pass
-        print("Connection refused, restart after 30 s")
-        time.sleep(30)
-        miner(address, host, port, cpu_count, password)
+        return
 
 
 if __name__ == "__main__":
@@ -219,5 +201,8 @@ if __name__ == "__main__":
                         metavar="USERNAME")
 
     options = parser.parse_args(sys.argv[1:])
-
-    miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads), options.password)
+    while True:
+        try:
+            miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads), options.password)
+        except:
+            print(traceback.format_exc())
