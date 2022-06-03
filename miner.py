@@ -177,6 +177,9 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                 raise
     except:
         print(traceback.format_exc())
+        sock.close()
+        for proc in procs:
+            proc.terminate()
         return
 
 
@@ -204,5 +207,7 @@ if __name__ == "__main__":
     while True:
         try:
             miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads), options.password)
+        except KeyboardInterrupt:
+            break
         except:
             print(traceback.format_exc())
