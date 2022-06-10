@@ -1,7 +1,4 @@
-#A stratum compatible miniminer
-#based in the documentation
-#https://slushpool.com/help/#!/manual/stratum-protocol
-#2017-2019 Martin Nadal https://martinnadal.eu
+#!/usr/bin/env python
 
 import socket
 import json
