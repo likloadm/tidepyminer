@@ -4,6 +4,7 @@ import socket
 import json
 import random
 import traceback
+from colorama import init, Fore, Style
 import multiprocessing
 import tdc_mine
 import time
@@ -11,6 +12,7 @@ from multiprocessing import Process, Queue, cpu_count
 
 
 bfh = bytes.fromhex
+init(autoreset=True)
 
 
 def hash_decode(x: str) -> bytes:
@@ -60,7 +62,7 @@ def worker(xblockheader, payload1, payload2, bdiff, sock, number):
             z = miner_thread(xblockheader, bdiff)
             sock.sendall(payload1 + z[:8] + payload2)
     except BrokenPipeError:
-        print("Pipe broken")
+        print(Fore.RED + "Pipe broken")
 
 
 def miner(address, host, port, cpu_count=cpu_count(), password='password'):
@@ -68,20 +70,18 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
           "If you like this piece of software, please "
           "consider supporting its future development via "
           "donating to this address TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw\n\n"
-          "Parameters:"
-          "-o mining server url (eg: pool.tidecoin.exchange:3032)\n"
-          "-u username(mining address) for mining server\n"
-          "-t count miner threads\n"
-          "-p password for mining server\n"
+          "Usage: "
+          "miner.py [-h] -u USERNAME [-o URL] [-t THREADS] [-p PASSWORD]\n"
           "Support chat: https://t.me/pool_tidecoin_exchange\n")
 
-    print("address:{}".format(address))
-    print("host:{} port:{}".format(host, port))
+    print("address: {}".format(address))
+    print("host: {} port: {}".format(host, port))
     print("Count threads: {}".format(cpu_count))
+
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((host, port))
-        print("Socket connected")
+        print(Fore.GREEN + "Socket connected")
 
         sock.sendall(b'{"id": 1, "method": "mining.subscribe", "params": ["pytideminer-1.0.0"]}\n')
         lines = sock.recv(1024).decode().split('\n')
@@ -89,11 +89,10 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
         sub_details, extranonce1, extranonce2_size = response['result']
         extranonce2 = '00' * extranonce2_size
         sock.sendall(b'{"params": ["' + address.encode() + b'", "' + password.encode() + b'"], "id": 2, "method": "mining.authorize"}\n')
-        print("Mining authorize")
+        print(Style.BRIGHT + "Mining authorization")
 
         procs = []
         count = cpu_count
-        print("Start mining")
         new_time = time.time()
         count_shares = 0
         global_count_share = 0
@@ -109,18 +108,19 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                     count_shares += 1
                     global_count_share += 1
                     global_count_success_share += 1
-                    print(f"accepted: {global_count_success_share}/{global_count_share} ({round(global_count_success_share/global_count_share*100)}%) (yay!!!)")
+                    print(Fore.GREEN + Style.BRIGHT + f"ACCEPTED: " + Fore.RESET + f"{global_count_success_share}/{global_count_share} ({round(global_count_success_share/global_count_share*100)}%) (yay!!!)")
 
                 elif response['id'] == 4 and response['error']:
                     global_count_share += 1
-                    print("boooo", response['error'])
+                    print(Fore.RED + Style.BRIGHT + "boooo", response['error'])
 
                 elif response['id'] == 2 and not response['error'] and response['result'] is not False:
-                    print("Authorize successful!!!")
+                    print(Fore.GREEN + "Authorize successful!!!")
+                    print(Fore.GREEN + Style.BRIGHT + "Starting mining")
 
                 elif response['id'] == 2 and (response['error'] or response['result'] is False):
-                    print("Authorize error!!!")
-                    raise Exception
+                    print(Fore.RED + "Authorize error!!!")
+                    raise SystemExit
 
 
                 # get rid of empty lines
@@ -128,7 +128,7 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                     old_diff = difficult
                     difficult = response['params'][0]
                     bdiff = bytes(str(difficult), "UTF-8")
-                    print("New stratum difficulty: ", difficult)
+                    print(Fore.CYAN + "New stratum difficulty: ", difficult)
 
                 elif response['method'] == 'mining.notify':
                     job_id, prevhash, coinb1, coinb2, merkle_branch, \
@@ -167,9 +167,9 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
 
                     if count_shares:
                         hashrate = count_shares * (old_diff / 65536) * 2 ** 32 / (new_time-old_time)
-                        print(f"Found {count_shares} shares in {round(new_time-old_time)} seconds at diff", old_diff)
-                        print(f"Current Hashrate:", round(hashrate), "H/s")
-                        print(f"Recommended diff:", round((count_shares*10/(new_time-old_time))*old_diff, 2))
+                        print(Fore.BOLD + f"Found {count_shares} shares in {round(new_time-old_time)} seconds at diff", old_diff)
+                        print(Fore.BOLD + f"Current Hashrate:", round(hashrate), "H/s")
+                        print(Fore.BOLD + f"Recommended diff:", round((count_shares*10/(new_time-old_time))*old_diff, 2))
                         old_diff = difficult
                         count_shares = 0
             if time.time() - timer_without_new_job > 120:
@@ -194,22 +194,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyMiner is a Stratum CPU mining client. "
                                                  "If you like this piece of software, please "
                                                  "consider supporting its future development via "
-                                                 "donating to one of the addresses indicated in the "
-                                                 "README.md file")
+                                                 "donating to this address TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw ")
 
+    parser.add_argument('-u', '--user', dest='username', default='', help='username (mining address) for mining server',
+                        metavar="USERNAME", required=True)
     parser.add_argument('-o', '--url', default="pool.tidecoin.exchange:3032", help='mining server url (eg: pool.tidecoin.exchange:3032)')
-    parser.add_argument('-u', '--user', dest='username', default='TSrAZcfyx8EZdzaLjV5ketPwtowgw3WUYw.default', help='username for mining server',
-                        metavar="USERNAME")
-    parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count threads',
-                        metavar="USERNAME")
-    parser.add_argument('-p', '--password', dest='password', default='password', help='password',
-                        metavar="USERNAME")
+    parser.add_argument('-t', '--threads', dest='threads', default=cpu_count(), help='count of threads',
+                        metavar="THREADS")
+    parser.add_argument('-p', '--password', dest='password', default='password', help='password for mining server',
+                        metavar="PASSWORD")
 
     options = parser.parse_args(sys.argv[1:])
     while True:
         try:
             miner(options.username, options.url.split(":")[0], int(options.url.split(":")[1]), int(options.threads), options.password)
         except KeyboardInterrupt:
+            break
+        except SystemExit:
+            print(Fore.RED + Style.BRIGHT + 'Check your address!')
             break
         except:
             print(traceback.format_exc())
