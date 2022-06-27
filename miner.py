@@ -115,11 +115,13 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
                     global_count_share += 1
                     print("boooo", response['error'])
 
-                elif response['id'] == 2 and not response['error']:
+                elif response['id'] == 2 and not response['error'] and response['result'] is not False:
                     print("Authorize successful!!!")
 
-                elif response['id'] == 2 and response['error']:
-                    print("Authorize error!!!", response['error'])
+                elif response['id'] == 2 and (response['error'] or response['result'] is False):
+                    print("Authorize error!!!")
+                    raise Exception
+
 
                 # get rid of empty lines
                 elif response['method'] == 'mining.set_difficulty':
@@ -177,7 +179,10 @@ def miner(address, host, port, cpu_count=cpu_count(), password='password'):
         sock.close()
         for proc in procs:
             proc.terminate()
-        return
+        if response['error'] or response['result'] is False:
+            quit()
+        else:
+            return
 
 
 if __name__ == "__main__":
